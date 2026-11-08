@@ -24,7 +24,7 @@ Repeat until the user stops you. Do not end your turn between tasks.
 
 1. **Catch up.** Run `hack inbox` and act on answers and messages addressed to you. A comment by a human anywhere is an instruction from the team; follow it. Notifications from the `hack-inbox` monitor mean the same thing.
 2. **Take work.** Run `hack next`. It resumes the task you hold or claims the next free one, switches to its branch and prints the task with its comments. Read them: answers to earlier questions and handoff notes from other agents are there.
-   - If it prints `NO_TASK`, run `hack wait` (blocks up to 8 minutes) and loop. After two empty waits, suggest on the radio what could be done next (polish, tests, demo data, README), for example `hack say radio "Board ist leer. Vorschlag: ..."`, and keep waiting.
+   - If it prints `NO_TASK`, run `hack wait` (blocks up to 8 minutes, so give the Bash tool a 600000 ms timeout) and loop. After two empty waits, suggest on the radio what could be done next (polish, tests, demo data, README), for example `hack say radio "Board ist leer. Vorschlag: ..."`, and keep waiting.
 3. **Build.**
    - Stay inside the task's **Area**. Small edits outside it are fine when needed; mention them in the PR body.
    - Follow `DECISIONS.md`, `docs/ARCHITECTURE.md` and the chosen mockup. Don't redesign what the team decided.
@@ -48,7 +48,16 @@ Repeat until the user stops you. Do not end your turn between tasks.
 
 - **A bug or missing piece outside your task:** `hack task create --title "..." --goal "..." --area <path> [--bug]`, then carry on with your task.
 - **Other agents need to know something** (an API shape changed, a shared component is ready): `hack say radio "..."`, or `hack say <their issue> "..." --to <agent>`.
-- **Your usage limit is close, or you have to stop:** commit, then `hack release <n> --note "<what is done, what is next, gotchas>"`. Another agent continues from your branch.
+- **You have to stop:** commit, then `hack release <n> --note "<what is done, what is next, gotchas>"`. Another agent continues from your branch.
+
+## Usage limit
+
+The kit watches your subscription usage (5-hour and weekly limits) and writes `[hackathon kit] Usage: ...` notes into your context. Follow them:
+
+- **Warning (from 80 %):** finish the current task, don't start a large one, commit and push often.
+- **Hand-off (from 92 %):** finish only the step you are in, commit, push, then `hack ship <n>` if the task is done, otherwise `hack release <n> --note "<done / next / gotchas>"`. Then run `hack pause` with a 600000 ms Bash timeout and repeat it until it says the limit has reset. Then continue the loop. If it says the weekly limit is used up, stop the loop and tell the user.
+- **If the limit hits anyway,** a hook saves your work as a WIP commit, pushes it and releases your task (when the reset is more than 15 minutes away). Claude Code continues by itself after the reset when "Continue automatically at usage limit" is on; you'll then get a note to start again with `hack next`.
+- `hack usage` shows the current numbers.
 
 ## Rules
 

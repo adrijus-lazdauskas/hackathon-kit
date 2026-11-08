@@ -1,5 +1,5 @@
 {
-  "description": "Hackathon kit: session context and Bash guards (only active in repos with a hackathon.json)",
+  "description": "Hackathon kit: session context, Bash guards, usage-limit warnings and hand-off (only active in repos with a hackathon.json)",
   "hooks": {
     "SessionStart": [
       {
@@ -20,6 +20,29 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-bash.mjs\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/usage-guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hack\" limit-hit",
+            "timeout": 90
           }
         ]
       }

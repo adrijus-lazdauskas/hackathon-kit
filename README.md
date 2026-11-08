@@ -10,7 +10,8 @@ Ein Claude-Code-Plugin für Hackathon-Teams. Jedes Teammitglied lässt seinen ei
 - **Fragen ohne Stillstand:** Braucht ein Agent eine Produktentscheidung, legt er ein Frage-Issue mit Optionen an und erwähnt euch. Ihr bekommt eine Push in der GitHub-App, antwortet mit einem Buchstaben, und der Agent arbeitet so lange an etwas anderem weiter.
 - **Agents reden miteinander:** über ein Team-Funk-Issue und Kommentare an den Tasks.
 - **Sauberes Repo:** Conventional Commits werden erzwungen, nie direkt auf `main`, jeder Task wird ein PR, der bei grünem CI automatisch per Squash gemergt wird.
-- **Übergabe:** Agents pushen ihren Stand laufend. Fällt einer aus (Kontingent leer, Laptop zu), übernimmt ein anderer nach 45 Minuten Inaktivität von dessen Branch.
+- **Kontingent im Blick:** Ab 80 % des 5-Stunden- oder Wochenlimits bekommt der Agent eine Warnung. Ab 92 % schließt er seinen Schritt ab, liefert aus oder gibt den Task mit Übergabe-Notiz frei und wartet mit `hack pause` bis zum Reset. Danach macht er weiter. Reißt das Limit trotzdem, sichert ein Hook den Stand als WIP-Commit, pusht ihn und gibt den Task frei. Die Status-Zeile zeigt den Stand, z. B. `hack · Kontingent 5h 42% · 7d 12%`.
+- **Übergabe:** Agents pushen ihren Stand laufend. Fällt einer ganz aus (Laptop zu), übernimmt ein anderer nach 45 Minuten Inaktivität von dessen Branch.
 - **Tester-Agent:** `/hack:test` spielt echte Nutzer durch, erst auf Papier, dann in der laufenden App, und legt jeden Fund als Bug-Task an.
 
 ## Einmal vorher, jede Person
@@ -23,7 +24,8 @@ Ein Claude-Code-Plugin für Hackathon-Teams. Jedes Teammitglied lässt seinen ei
    ```
 
 3. In der GitHub-App auf dem Handy Push-Benachrichtigungen für Erwähnungen (@mentions) einschalten.
-4. Das Plugin in Claude Code installieren:
+4. Automatisches Weitermachen nach dem Limit einschalten: im Terminal in `/config` die Einstellung „Continue automatically at usage limit“, in der Desktop-App die Checkbox „Auto-continue when limits reset“ auf der Limit-Karte (die erscheint erst, wenn das Limit einmal erreicht ist).
+5. Das Plugin in Claude Code installieren:
 
    ```text
    /plugin marketplace add adrijus-lazdauskas/hackathon-kit
@@ -61,6 +63,7 @@ Ein Claude-Code-Plugin für Hackathon-Teams. Jedes Teammitglied lässt seinen ei
 | Ausliefern | `hack ship` | rebase → PR mit `Closes #n` → CI → Squash-Merge |
 | Regeln | Plugin-Hooks | Conventional Commits, kein Push auf `main`, kein Force-Push, GitHub-Schreibzugriffe nur über `hack` |
 | Vorschau | Workflow `preview` | baut die App und legt `mockups/` daneben, auf GitHub Pages |
+| Kontingent | Status-Zeile + Hooks | Status-Zeile speichert die Limits, Hook warnt ab 80 % und lässt ab 92 % übergeben, `StopFailure`-Hook sichert und gibt frei |
 
 Das Kommando `hack` liegt im Plugin und ist für Claude automatisch im PATH. `hack help` zeigt alle Befehle.
 
@@ -74,7 +77,8 @@ HACK_AGENT=adrijus-2 claude --permission-mode auto
 
 ## Grenzen der ersten Version
 
-- Das Kontingent wird noch nicht aktiv gemessen. Läuft es leer, bleibt der Task 45 Minuten gesperrt, dann übernimmt ihn ein anderer Agent. Eine Warnung vor dem Limit kommt in v2.
+- Die Limit-Werte kommen aus der Status-Zeile von Claude Code (nur mit Pro-, Max- oder Ultra-Abo). Das Kit setzt dafür im Projekt eine eigene Status-Zeile, die deine persönliche weiter anzeigt. Läuft keine Status-Zeile (z. B. wenn die Desktop-App keine anzeigt), fehlt die Vorwarnung. Die Übergabe bei erreichtem Limit greift trotzdem.
+- Ist das Wochenlimit aufgebraucht, wartet der Agent nicht tagelang, sondern hört auf und sagt Bescheid.
 - GitHub benachrichtigt dich nicht über deine eigenen Aktionen. Stellt dein Agent eine Frage, bekommen nur die anderen eine Push.
 - Die Pages-Vorschau gibt es nur für öffentliche Repos (bei privaten nur mit bezahltem GitHub-Plan).
 - Die Agents reden asynchron miteinander. Eine Nachricht kommt innerhalb von etwa einer Minute an, nicht sofort.

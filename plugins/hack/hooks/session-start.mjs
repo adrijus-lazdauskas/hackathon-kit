@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findKitRoot, readJson, run } from '../lib/util.mjs';
+import { describe, readNotices, readUsage, thresholds, worstWindow } from '../lib/usage.mjs';
 
 let input = {};
 try {
@@ -34,6 +35,17 @@ const held = run(
 );
 if (held) {
   lines.push(`You hold: ${held.split('\n').join('; ')}. Continue it, or hand it off with \`hack release <n> --note "..."\`.`);
+}
+const u = readUsage();
+const w = worstWindow(u);
+if (w) {
+  const t = thresholds(cfg);
+  const advice = w.pct >= t.handoff ? ' Almost used up: hand off instead of starting new work.' : '';
+  lines.push(`Usage: ${describe(u, cfg.timezone)}.${advice}`);
+}
+const released = readNotices().released?.[root];
+if (released && !released.acknowledged) {
+  lines.push(`While you were paused by the usage limit, ${released.tasks.map((n) => `#${n}`).join(', ')} were released for teammates. Start with \`hack next\`.`);
 }
 const cli = process.env.CLAUDE_PLUGIN_ROOT ? ` (if \`hack\` is not found: node "${process.env.CLAUDE_PLUGIN_ROOT}/bin/hack")` : '';
 lines.push(`To work the board, run the /hack:work loop. CLI reference: \`hack help\`${cli}.`);

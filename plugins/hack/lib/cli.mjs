@@ -21,6 +21,7 @@ import {
   slugify,
   writeJson,
 } from './util.mjs';
+import * as usage from './usage.mjs';
 
 const KIT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = join(KIT_ROOT, 'templates');
@@ -44,6 +45,7 @@ const TEMPLATE_FILES = [
   // [template, target, mode] - "kit" files are always refreshed, "seed" files only written when missing.
   ['github/workflows/hack-bot.yml', '.github/workflows/hack-bot.yml', 'kit'],
   ['github/hack/hack-bot.mjs', '.github/hack/hack-bot.mjs', 'kit'],
+  ['github/hack/statusline.mjs', '.github/hack/statusline.mjs', 'kit'],
   ['github/workflows/ci.yml', '.github/workflows/ci.yml', 'seed'],
   ['github/workflows/preview.yml', '.github/workflows/preview.yml', 'seed'],
   ['github/ISSUE_TEMPLATE/task.yml', '.github/ISSUE_TEMPLATE/task.yml', 'seed'],
@@ -62,6 +64,7 @@ const ALLOW_RULES = [
 ];
 
 const LANGUAGE_NAMES = { de: 'German', en: 'English' };
+const STATUSLINE_COMMAND = 'node .github/hack/statusline.mjs';
 
 // ---------- small helpers ----------
 
@@ -264,6 +267,16 @@ function holderOf(n) {
   return holder;
 }
 
+function heldTasks() {
+  const me = agentId();
+  const myLogin = login();
+  return model
+    .listIssues()
+    .filter((i) => i.state === 'OPEN' && i.labels.includes(LABEL.progress) && i.assignees.includes(myLogin))
+    .filter((i) => holderOf(i.number) === me)
+    .map((i) => i.number);
+}
+
 function holds(n) {
   const i = issueView(n);
   return i.state === 'OPEN' && i.labels.includes(LABEL.progress) && holderOf(n) === agentId();
@@ -370,6 +383,10 @@ Talking
   hack inbox [--peek]                   New answers, messages and bugs since you last looked
   hack wait [--timeout 480]             Block until a task frees up or something arrives (seconds)
 
+Usage limit
+  hack usage                            Show the 5-hour and weekly usage limits the status line recorded
+  hack pause [--max 540]                After handing off: wait until the usage limit resets (repeat until it says so)
+
 Board
   hack status [--publish]               Print the board (and refresh the pinned board issue)
   hack task create --title "..." [--goal "..."] [--accept "..."]... [--area path]... [--depends n]... [--bug] [--prio high|low]
@@ -430,6 +447,10 @@ function mergeSettings(root, cfg) {
   s.permissions.deny = [...new Set([...(s.permissions.deny || []), 'Read(./.env)', 'Read(./.env.*)'])];
   s.permissions.defaultMode ||= 'acceptEdits';
   if (!cfg.allowAiAttribution) s.attribution = { commit: '', pr: '' };
+  // Records the usage limits for the kit's hooks; shows the user's own status line too.
+  if (!s.statusLine || String(s.statusLine.command || '').includes('.github/hack/statusline')) {
+    s.statusLine = { type: 'command', command: STATUSLINE_COMMAND };
+  }
   writeJson(path, s);
 }
 
@@ -487,6 +508,7 @@ function cmdInit(argv) {
     language: 'de',
     timezone: 'Europe/Berlin',
     staleMinutes: 45,
+    usage: { warnAt: 80, handoffAt: 92, releaseIfResetInMin: 15 },
     allowAiAttribution: false,
     previewDir: '',
     ...old,
@@ -538,8 +560,9 @@ function cmdInit(argv) {
   git(['add', '-f', '--', ...written]);
   const staged = git(['diff', '--cached', '--name-only']);
   if (staged) {
-    git(['commit', '-m', 'chore: set up hackathon kit', ...(hasHead ? ['--', ...written] : [])]);
-    out('✔ committed "chore: set up hackathon kit"');
+    const message = old.board ? 'chore: update hackathon kit' : 'chore: set up hackathon kit';
+    git(['commit', '-m', message, ...(hasHead ? ['--', ...written] : [])]);
+    out(`✔ committed "${message}"`);
   }
   if (!args['no-push']) {
     if (!hasHead || localBranch === main) {
@@ -1043,6 +1066,105 @@ function cmdShip(argv) {
   }
 }
 
+function cmdUsage() {
+  const { cfg } = kit();
+  const u = usage.readUsage({ maxAgeMin: 24 * 60 });
+  out(usage.describe(u, cfg.timezone));
+  if (!u) {
+    out('The kit status line records these values while Claude Code runs (claude.ai Pro/Max plans). Check that .claude/settings.json has the statusLine entry and that this folder is trusted.');
+  }
+}
+
+function cmdPause(argv) {
+  const args = parseArgs(argv);
+  const c = kit();
+  const tz = c.cfg.timezone || 'Europe/Berlin';
+  const t = usage.thresholds(c.cfg);
+  const u = usage.readUsage({ maxAgeMin: 24 * 60 });
+  const over = (u?.windows || []).filter((w) => w.pct >= t.handoff);
+  if (!over.length) {
+    out(`No usage limit is close (${usage.describe(u, tz)}). Continue the work loop: hack inbox, then hack next.`);
+    return;
+  }
+  const held = heldTasks();
+  if (held.length) {
+    throw new HackError(`You still hold ${held.map((n) => `#${n}`).join(', ')}. Ship it (hack ship <n>) or hand it off (hack release <n> --note "...") before pausing.`);
+  }
+  const weekly = over.find((w) => w.key === 'seven_day');
+  if (weekly && usage.minutesUntil(weekly.resetsAt) > 12 * 60) {
+    out(
+      `⏹ The weekly limit is at ${Math.round(weekly.pct)}% and resets ${usage.fmtReset(weekly.resetsAt, tz)}. Waiting for it makes no sense.`,
+      'Stop the work loop here and tell the user in chat; your teammates\' agents keep going.',
+    );
+    return;
+  }
+  const target = Math.max(...over.map((w) => w.resetsAt || 0));
+  if (!target) {
+    out('The reset time is unknown. Stop here; Claude Code continues by itself once the limit resets (if "Continue automatically at usage limit" is on).');
+    return;
+  }
+  if (c.state.pausedUntil !== target) {
+    comment(c.cfg.radio, `<!-- hack:say agent=${agentId()} -->\n**${agentId()}**: ⏸️ Kontingent fast aufgebraucht, pausiere bis ${usage.fmtReset(target, tz)}.`);
+    c.state.pausedUntil = target;
+    saveCtxState();
+  }
+  const waitMs = Math.min(target - Date.now() + 30000, Number(args.max || 540) * 1000);
+  if (waitMs > 0) sleep(waitMs);
+  if (Date.now() >= target) {
+    out('✔ The usage limit has reset. Continue the work loop: hack inbox, then hack next.');
+  } else {
+    out(`⏸ Still paused: the limit resets ${usage.fmtReset(target, tz)} (in ${usage.fmtIn(target)}). Run hack pause again (Bash timeout 600000 ms).`);
+  }
+}
+
+// StopFailure hook (error = rate_limit): if the subscription limit ran out and the reset is not
+// close, save and push the work on held tasks and release them so teammates can continue.
+function cmdLimitHit() {
+  let input = {};
+  try {
+    input = JSON.parse(readFileSync(0, 'utf8') || '{}');
+  } catch {
+    // no input
+  }
+  if (input.cwd) process.chdir(input.cwd);
+  if (!findKitRoot()) return;
+  const { root, cfg } = kit();
+  const tz = cfg.timezone || 'Europe/Berlin';
+  const t = usage.thresholds(cfg);
+  const w = usage.worstWindow(usage.readUsage({ maxAgeMin: 60 }));
+  const text = `${input.last_assistant_message || ''} ${input.error_details || ''}`;
+  const isQuota = (w && w.pct >= t.handoff) || /hit your|usage limit|session limit|weekly limit|opus limit|sonnet limit/i.test(text);
+  if (!isQuota) return; // a short API rate limit, not the subscription limit
+  const minutes = w ? usage.minutesUntil(w.resetsAt) : null;
+  if (minutes !== null && minutes < t.releaseIfResetInMin) return; // resumes soon on its own
+
+  const me = agentId();
+  const held = heldTasks();
+  if (!held.length) return;
+  const reset = w ? usage.fmtReset(w.resetsAt, tz) : 'unbekannt';
+  const branches = [];
+  for (const n of held) {
+    const branch = currentBranch();
+    let pushed = null;
+    if (branch && new RegExp(`(^|/)${n}-`).test(branch)) {
+      if (isDirty()) {
+        git(['add', '-A']);
+        git(['commit', '-m', `chore(wip): save work on #${n} before usage limit pause`]);
+      }
+      if (aheadOfMain() > 0) pushed = pushCurrent();
+    } else {
+      const remote = findTaskBranch(n);
+      if (remote) pushed = remote.ref.replace(/^origin\//, '');
+    }
+    releaseIssue(n, { note: `Kontingent von ${me} ist aufgebraucht (Reset ${reset}). Bitte auf dem Branch weitermachen.`, branch: pushed });
+    if (pushed) branches.push(pushed);
+  }
+  comment(cfg.radio, `<!-- hack:say agent=${me} -->\n**${me}**: ⏸️ Kontingent aufgebraucht, pausiere bis ${reset}. Freigegeben: ${held.map((n) => `#${n}`).join(', ')}.`);
+  const notices = usage.readNotices();
+  (notices.released ||= {})[root] = { tasks: held, branches, at: Date.now(), acknowledged: false };
+  usage.writeNotices(notices);
+}
+
 const COMMANDS = {
   help: cmdHelp,
   '--help': cmdHelp,
@@ -1061,6 +1183,9 @@ const COMMANDS = {
   watch: cmdWatch,
   task: cmdTask,
   ship: cmdShip,
+  usage: cmdUsage,
+  pause: cmdPause,
+  'limit-hit': cmdLimitHit,
 };
 
 export function main(argv) {
