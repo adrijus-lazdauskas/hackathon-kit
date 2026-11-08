@@ -1,0 +1,82 @@
+name: preview
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy app and mockups to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect buildable app
+        id: detect
+        run: |
+          if [ -f package.json ] && grep -q '"build"' package.json; then echo "build=true" >> "$GITHUB_OUTPUT"; else echo "build=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.build == 'true'
+        with:
+          node-version: 22
+
+      - name: Build app
+        if: steps.detect.outputs.build == 'true'
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: |
+          if [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ]; then corepack enable && yarn install --immutable
+          elif [ -f package-lock.json ]; then npm ci
+          else npm install
+          fi
+          npm run build
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          dir=$(jq -r '.previewDir // ""' hackathon.json 2>/dev/null || true)
+          if [ -z "$dir" ]; then
+            for d in dist build out; do
+              if [ -f "$d/index.html" ]; then dir=$d; break; fi
+            done
+          fi
+          if [ -n "$dir" ] && [ -d "$dir" ]; then
+            cp -R "$dir"/. _site/
+            if [ -f _site/index.html ] && [ ! -f _site/404.html ]; then cp _site/index.html _site/404.html; fi
+          fi
+          if [ -d mockups ]; then mkdir -p _site/mockups && cp -R mockups/. _site/mockups/; fi
+          if [ ! -f _site/index.html ]; then
+            {
+              echo '<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vorschau</title>'
+              echo '<body style="font-family:system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;line-height:1.5">'
+              echo '<h1>Noch keine App gebaut</h1><p>Sobald der Build steht, erscheint sie hier.</p>'
+              if [ -d mockups ]; then echo '<p><a href="mockups/">Zu den Mockups</a></p>'; fi
+              echo '</body></html>'
+            } > _site/index.html
+          fi
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

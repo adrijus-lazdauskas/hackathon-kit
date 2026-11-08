@@ -1,0 +1,27 @@
+name: Task
+description: Etwas, das die Agents bauen sollen
+labels: ["task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Ziel
+      description: Was soll stimmen, wenn der Task fertig ist?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Abnahmekriterien
+      description: Prüfbare Punkte, einer pro Zeile
+      value: "- [ ] "
+  - type: input
+    id: area
+    attributes:
+      label: Bereich
+      description: Ordner oder Dateien, die dieser Task besitzt, mit Komma getrennt (verhindert Konflikte zwischen Agents)
+  - type: input
+    id: depends
+    attributes:
+      label: Hängt ab von
+      description: Issues, die vorher fertig sein müssen, z. B. #3, #5

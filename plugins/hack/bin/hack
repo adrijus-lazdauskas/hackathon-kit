@@ -1,0 +1,11 @@
+#!/usr/bin/env node
+// Entry point for the `hack` command. Claude Code puts this folder on PATH while the plugin is enabled.
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+
+import(pathToFileURL(path.join(__dirname, '..', 'lib', 'cli.mjs')).href)
+  .then((cli) => cli.main(process.argv.slice(2)))
+  .catch((err) => {
+    console.error(err && err.stack ? err.stack : String(err));
+    process.exit(1);
+  });

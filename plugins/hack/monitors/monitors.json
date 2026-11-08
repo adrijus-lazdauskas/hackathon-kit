@@ -1,0 +1,8 @@
+[
+  {
+    "name": "hack-inbox",
+    "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hack\" watch",
+    "description": "Answers from the humans, messages from other agents and new bugs on the hackathon board",
+    "when": "on-skill-invoke:work"
+  }
+]

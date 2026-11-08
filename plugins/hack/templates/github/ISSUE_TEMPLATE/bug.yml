@@ -1,0 +1,22 @@
+name: Bug
+description: Etwas funktioniert nicht
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: Ziel
+      description: Was ist kaputt? Schritte zum Nachstellen, erwartet und tatsächlich
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Abnahmekriterien
+      description: Woran merken wir, dass es behoben ist?
+      value: "- [ ] "
+  - type: input
+    id: area
+    attributes:
+      label: Bereich
+      description: Vermuteter Ordner oder Datei, falls bekannt
