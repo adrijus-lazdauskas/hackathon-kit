@@ -218,7 +218,10 @@ function claim(n, { takeover = false } = {}) {
   sleep(2000);
   const since = new Date(Date.parse(mine.created_at) - 120000).toISOString();
   const recent = ghJson(['api', `repos/${repo}/issues/${n}/comments?since=${since}&per_page=100`]) || [];
-  const rivals = recent.filter((c) => model.parseMarker(c.body, kind)).sort((a, b) => a.id - b.id);
+  const lastRelease = Math.max(0, ...recent.filter((c) => model.parseMarker(c.body, 'release')).map((c) => c.id));
+  const rivals = recent
+    .filter((c) => c.id > lastRelease && model.parseMarker(c.body, kind))
+    .sort((a, b) => a.id - b.id);
   if (rivals[0]?.id === mine.id) {
     editIssue(n, {
       addLabels: [LABEL.progress],
@@ -244,9 +247,26 @@ function releaseIssue(n, { note, blocked = false, branch } = {}) {
   });
 }
 
+function issueComments(n) {
+  const pages = ghJson(['api', '--paginate', '--slurp', `repos/${repoName()}/issues/${n}/comments?per_page=100`]) || [];
+  return pages.flat();
+}
+
+// The agent that currently holds task n according to its claim/takeover/release markers.
+function holderOf(n) {
+  let holder = null;
+  for (const c of issueComments(n)) {
+    const taken = model.parseMarker(c.body, 'claim') || model.parseMarker(c.body, 'takeover');
+    const released = model.parseMarker(c.body, 'release');
+    if (taken) holder = taken.agent;
+    else if (released && released.agent === holder) holder = null;
+  }
+  return holder;
+}
+
 function holds(n) {
   const i = issueView(n);
-  return i.state === 'OPEN' && i.assignees.includes(login()) && i.labels.includes(LABEL.progress);
+  return i.state === 'OPEN' && i.labels.includes(LABEL.progress) && holderOf(n) === agentId();
 }
 
 // Pushes the current branch if it belongs to task n and has commits, then returns to main.
@@ -279,6 +299,12 @@ function collectInbox(sinceIso) {
   const byNumber = new Map(issues.map((i) => [i.number, i]));
   const since = Date.parse(sinceIso);
   const items = [];
+  const held = new Set(
+    issues
+      .filter((i) => i.state === 'OPEN' && i.labels.includes(LABEL.progress) && i.assignees.includes(myLogin))
+      .filter((i) => holderOf(i.number) === me)
+      .map((i) => i.number),
+  );
 
   for (const c of comments) {
     if (Date.parse(c.created_at) <= since) continue;
@@ -289,14 +315,21 @@ function collectInbox(sinceIso) {
     const kind = anyMarker?.[1];
     const meta = anyMarker ? model.parseMarker(c.body, kind) : {};
     if (meta?.agent === me) continue;
-    if (['claim', 'takeover', 'bot'].includes(kind)) continue;
+    if (['claim', 'bot'].includes(kind)) continue;
     const who = meta?.agent || `@${c.user.login}`;
-    const text = oneLine(stripMarkers(c.body), 280);
+    let body = stripMarkers(c.body).replace(/^\S*\s*\*\*[^*\n]+\*\*(?: → \S+)?:\s*/, '');
+    if (kind === 'answer') body = body.split('\n').filter((l) => l.startsWith('>')).map((l) => l.slice(1).trim()).join(' ');
+    const text = oneLine(body, 280);
     const human = !anyMarker && c.user.type !== 'Bot';
     const askedByMe = model.parseMarker(issue.body, 'question')?.agent === me;
-    const heldByMe = issue.state === 'OPEN' && issue.assignees.includes(myLogin) && issue.labels.includes(LABEL.progress);
+    const heldByMe = held.has(n);
 
-    if (kind === 'answer') items.push(`💡 #${n} hat eine Antwort (Frage #${meta.q}): ${text}`);
+    if (kind === 'takeover') {
+      items.push(`⚠️ #${n} wurde von ${who} übernommen. Falls das deiner war: nicht weiter daran arbeiten, nicht shippen, hack next.`);
+    } else if (kind === 'answer') {
+      const q = byNumber.get(Number(meta.q));
+      if (model.parseMarker(q?.body, 'question')?.agent !== me) items.push(`💡 #${n} hat eine Antwort (Frage #${meta.q}): ${text}`);
+    }
     else if (issue.labels.includes(LABEL.question) && human && askedByMe) items.push(`💡 Antwort auf deine Frage #${n} von ${who}: ${text}`);
     else if (kind === 'say' && meta.to && meta.to === me) items.push(`📨 ${who} an dich (#${n}): ${text}`);
     else if (n === cfg.radio) items.push(`📻 ${who}: ${text}`);
@@ -501,7 +534,8 @@ function cmdInit(argv) {
     out('⚠ private repo: GitHub Pages preview needs a paid plan, skipped');
   }
 
-  git(['add', '--', ...written]);
+  // -f: many people ignore .claude/ globally, but the team settings must be in the repo.
+  git(['add', '-f', '--', ...written]);
   const staged = git(['diff', '--cached', '--name-only']);
   if (staged) {
     git(['commit', '-m', 'chore: set up hackathon kit', ...(hasHead ? ['--', ...written] : [])]);
@@ -617,11 +651,13 @@ function startTask(t, { resume = false, takeover = false } = {}) {
 function cmdNext(argv) {
   const args = parseArgs(argv, { booleans: ['another', 'dry'] });
   const { cfg } = kit();
-  const myLogin = login();
+  const me = agentId();
   git(['fetch', 'origin', '--prune', '--quiet']);
   const issues = model.listIssues();
   const c = model.classify(issues);
-  const mine = c.inProgress.filter((i) => i.assignees.includes(myLogin) && i.labels.includes(LABEL.progress));
+  // Tasks a human assigned to themselves (no in-progress label) are theirs, never stale.
+  for (const i of c.inProgress) i.holder = i.labels.includes(LABEL.progress) ? holderOf(i.number) : null;
+  const mine = c.inProgress.filter((i) => i.holder === me);
   if (mine.length && !args.another) {
     out(`You already hold #${mine[0].number}. Finish it (hack ship ${mine[0].number}) or hand it off (hack release ${mine[0].number} --note "...").`);
     startTask(mine[0], { resume: true });
@@ -632,7 +668,7 @@ function cmdNext(argv) {
   const busy = c.inProgress.flatMap((i) => model.areas(i));
   const overlaps = (i) => model.areas(i).some((a) => busy.some((b) => a.startsWith(b) || b.startsWith(a)));
   const ready = [...c.ready.filter((i) => !overlaps(i)), ...c.ready.filter(overlaps)];
-  const stale = c.inProgress.filter((i) => !i.assignees.includes(myLogin) && lastActivityMinutes(i) > staleMinutes(cfg));
+  const stale = c.inProgress.filter((i) => i.holder && i.holder !== me && lastActivityMinutes(i) > staleMinutes(cfg));
 
   if (args.dry) {
     out(`Ready: ${ready.map((i) => `#${i.number}`).join(', ') || '-'}`, `Stale: ${stale.map((i) => `#${i.number}`).join(', ') || '-'}`);
@@ -929,6 +965,12 @@ function cmdShip(argv) {
   }
   const n = args._[0] ? num(args._[0]) : Number(branch.match(/(?:^|\/)(\d+)-/)?.[1]) || null;
   if (isDirty()) throw new HackError('Uncommitted changes. Commit them with a conventional message first.');
+  if (n) {
+    const holder = holderOf(n);
+    if (holder && holder !== agentId()) {
+      throw new HackError(`#${n} is held by ${holder} now (taken over). Don't ship it; tell them on the task with hack say ${n} "..." where your work is, then hack next.`);
+    }
+  }
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     git(['fetch', 'origin', '--prune', '--quiet']);

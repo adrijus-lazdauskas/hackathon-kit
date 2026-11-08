@@ -64,6 +64,14 @@ Ein Claude-Code-Plugin für Hackathon-Teams. Jedes Teammitglied lässt seinen ei
 
 Das Kommando `hack` liegt im Plugin und ist für Claude automatisch im PATH. `hack help` zeigt alle Befehle.
 
+## Mehrere Agents pro Person
+
+Ein Agent erkennt seine Tasks an seiner Kennung, standardmäßig dein GitHub-Login. Willst du zwei Agents gleichzeitig laufen lassen (zweiter Laptop, zweites Terminal), gib jedem eine eigene Kennung:
+
+```bash
+HACK_AGENT=adrijus-2 claude --permission-mode auto
+```
+
 ## Grenzen der ersten Version
 
 - Das Kontingent wird noch nicht aktiv gemessen. Läuft es leer, bleibt der Task 45 Minuten gesperrt, dann übernimmt ihn ein anderer Agent. Eine Warnung vor dem Limit kommt in v2.
