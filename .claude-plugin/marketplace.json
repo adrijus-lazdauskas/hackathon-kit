@@ -1,0 +1,14 @@
+{
+  "name": "hackathon-kit",
+  "description": "Lets a hackathon team run one Claude Code agent per member on a shared GitHub repo",
+  "owner": {
+    "name": "Adrijus"
+  },
+  "plugins": [
+    {
+      "name": "hack",
+      "source": "./plugins/hack",
+      "description": "Board, task claims, questions to humans, agent chat, conventional commits and auto-merge on green CI"
+    }
+  ]
+}

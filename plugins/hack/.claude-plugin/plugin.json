@@ -1,0 +1,8 @@
+{
+  "name": "hack",
+  "version": "0.1.0",
+  "description": "Hackathon autopilot: one Claude Code agent per team member, coordinated through GitHub issues",
+  "author": {
+    "name": "Adrijus"
+  }
+}
