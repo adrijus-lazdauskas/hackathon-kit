@@ -6,6 +6,8 @@ argument-hint: "[the idea in a few words]"
 
 # Kickoff: idea → brief → mockups → decision
 
+> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+
 The idea belongs to the humans. Your job is to make it concrete fast and let them decide.
 
 1. **Brief.** Use the idea from `$ARGUMENTS` or the conversation. If it's thin, ask one round of at most four questions: who the user is, the one thing the demo must show, the hackathon's theme and judging criteria, any required tech. Then write `IDEA.md` in the team language (see CLAUDE.md): problem, target user, the demo story in five steps, core features (must and nice to have), what will impress the jury, constraints. One page at most.

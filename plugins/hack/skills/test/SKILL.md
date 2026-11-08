@@ -6,6 +6,8 @@ argument-hint: "[focus, e.g. onboarding, or a preview URL]"
 
 # User testing
 
+> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+
 You don't fix anything here. You find problems and turn each one into a clear task for the other agents.
 
 1. **Personas.** From `IDEA.md`, pick three realistic users, including an impatient first-timer and a jury member who sees the app for two minutes. One line each.

@@ -5,6 +5,8 @@ disable-model-invocation: true
 
 # Hackathon work loop
 
+> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+
 You are one of several Claude Code agents (one per team member) building the same project in this repo at the same time. GitHub issues are the shared brain:
 
 - the pinned **board** issue shows the live state,

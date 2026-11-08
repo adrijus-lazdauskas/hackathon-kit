@@ -5,6 +5,8 @@ disable-model-invocation: true
 
 # Plan: decided idea → tasks on the board
 
+> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+
 Read `IDEA.md`, `DECISIONS.md` and the chosen mockup in `mockups/`. The `team` list in `hackathon.json` tells you how many agents will work in parallel.
 
 1. **Stack.** Unless the team already decided, propose a stack in one short paragraph. Default for web apps: Vite + React + TypeScript, plain CSS or Tailwind, no backend unless the demo needs one (static data or localStorage beats a database in a hackathon). The build must work under a sub-path for the GitHub Pages preview (Vite: `base: './'`), unless the team picked another host. Ask the user to confirm in chat (one question), then continue.
