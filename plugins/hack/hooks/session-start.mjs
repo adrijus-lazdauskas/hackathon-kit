@@ -47,6 +47,6 @@ const released = readNotices().released?.[root];
 if (released && !released.acknowledged) {
   lines.push(`While you were paused by the usage limit, ${released.tasks.map((n) => `#${n}`).join(', ')} were released for teammates. Start with \`hack next\`.`);
 }
-const cli = process.env.CLAUDE_PLUGIN_ROOT ? ` (if \`hack\` is not found: node "${process.env.CLAUDE_PLUGIN_ROOT}/bin/hack")` : '';
+const cli = process.env.CLAUDE_PLUGIN_ROOT ? ` (if \`hack\` is not found or fails to start: node "${process.env.CLAUDE_PLUGIN_ROOT}/bin/hack")` : '';
 lines.push(`To work the board, run the /hack:work loop. CLI reference: \`hack help\`${cli}.`);
 console.log(lines.join('\n'));

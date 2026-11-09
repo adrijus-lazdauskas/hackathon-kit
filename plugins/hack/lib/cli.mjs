@@ -1,4 +1,5 @@
 // The `hack` command: everything an agent (or a human) needs to work the shared board.
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,6 +51,7 @@ const TEMPLATE_FILES = [
   ['github/workflows/preview.yml', '.github/workflows/preview.yml', 'seed'],
   ['github/ISSUE_TEMPLATE/task.yml', '.github/ISSUE_TEMPLATE/task.yml', 'seed'],
   ['github/ISSUE_TEMPLATE/bug.yml', '.github/ISSUE_TEMPLATE/bug.yml', 'seed'],
+  ['gitattributes', '.gitattributes', 'seed'],
 ];
 
 const ALLOW_RULES = [
@@ -115,6 +117,21 @@ function kit() {
 
 function saveCtxState() {
   if (ctx) saveState(ctx.root, ctx.state);
+}
+
+// GitHub logins with access to the repo; withInvites adds people who were invited but have not accepted yet.
+function collaboratorLogins(repo, { withInvites = false } = {}) {
+  const lines = [gh(['api', `repos/${repo}/collaborators`, '--jq', '.[].login'], { allowFail: true })];
+  if (withInvites) lines.push(gh(['api', `repos/${repo}/invitations`, '--jq', '.[].invitee.login'], { allowFail: true }));
+  return [
+    ...new Set(
+      lines
+        .join('\n')
+        .split('\n')
+        .map((t) => t.trim())
+        .filter((t) => t && !t.endsWith('[bot]')),
+    ),
+  ];
 }
 
 function repoName() {
@@ -402,15 +419,40 @@ function cmdHelp() {
 function cmdDoctor() {
   const lines = [];
   const ok = (good, text) => lines.push(`${good ? '✔' : '✘'} ${text}`);
+  const info = (text) => lines.push(`• ${text}`);
   ok(Number(process.versions.node.split('.')[0]) >= 18, `node ${process.versions.node} (needs 18+)`);
+  const shebang = readFileSync(join(KIT_ROOT, 'bin/hack'), 'utf8').split('\n')[0];
+  ok(
+    !shebang.endsWith('\r'),
+    shebang.endsWith('\r')
+      ? 'plugin files have Windows line endings, so the bare `hack` command fails: use node "<plugin>/bin/hack" or reinstall the plugin'
+      : 'plugin line endings',
+  );
+  const gitv = run('git', ['--version'], { allowFail: true });
+  ok(Boolean(gitv), gitv || 'git missing: https://git-scm.com');
+  if (gitv) {
+    const name = git(['config', 'user.name'], { allowFail: true });
+    const email = git(['config', 'user.email'], { allowFail: true });
+    ok(
+      Boolean(name && email),
+      name && email ? `git identity ${name} <${email}>` : 'git identity missing: git config --global user.name "..." and user.email "..."',
+    );
+  }
   const ghv = run('gh', ['--version'], { allowFail: true });
   ok(Boolean(ghv), ghv ? ghv.split('\n')[0] : 'gh CLI missing: https://cli.github.com');
-  const auth = ghv ? run('gh', ['auth', 'status'], { allowFail: true }) : null;
-  ok(Boolean(auth), auth ? `gh logged in as ${login()}` : 'gh not logged in: run `gh auth login`');
+  // gh prints its status to stderr in older versions, so read both streams.
+  const st = ghv ? spawnSync('gh', ['auth', 'status'], { encoding: 'utf8' }) : null;
+  const auth = st && st.status === 0;
+  ok(auth, auth ? `gh logged in as ${login()}` : 'gh not logged in: run `gh auth login`');
+  const scopes = auth ? `${st.stdout}${st.stderr}`.match(/Token scopes:(.*)/) : null;
+  if (scopes) {
+    const hasWorkflow = /workflow/.test(scopes[1]);
+    ok(hasWorkflow, hasWorkflow ? 'gh token can push workflow files' : 'gh token lacks the workflow scope: run `gh auth refresh -s workflow`');
+  }
   const root = gitRoot();
-  ok(Boolean(root), root ? `git repo ${root}` : 'not inside a git repo');
+  if (!root) info('not inside a git repo (fine until you clone the hackathon repo)');
   const kitRoot = findKitRoot();
-  ok(Boolean(kitRoot), kitRoot ? 'hackathon.json found' : 'no hackathon.json yet: run `hack init`');
+  if (root) ok(Boolean(kitRoot), kitRoot ? 'hackathon.json found' : 'no hackathon.json yet: run `hack init`');
   if (kitRoot && auth) {
     const c = kit();
     ok(Boolean(c.cfg.board), `board issue #${c.cfg.board || '?'}, radio #${c.cfg.radio || '?'}`);
@@ -480,8 +522,7 @@ function cmdInit(argv) {
   const old = readJson(join(root, 'hackathon.json'), {});
   const team = new Set([me, ...(old.team || [])]);
   for (const t of String(args.team || '').split(',')) if (t.trim()) team.add(t.trim().replace(/^@/, ''));
-  const collaborators = gh(['api', `repos/${repo}/collaborators`, '--jq', '.[].login'], { allowFail: true });
-  for (const t of (collaborators || '').split('\n')) if (t.trim()) team.add(t.trim());
+  for (const t of collaboratorLogins(repo, { withInvites: true })) team.add(t);
 
   out(`Setting up the hackathon kit for ${repo} …`);
   for (const [name, color, description] of LABELS) {
@@ -762,7 +803,9 @@ function cmdAsk(argv) {
       ? `👉 Antwortet mit einem Kommentar, ein Buchstabe reicht (z. B. „${firstKey}“). Eigene Worte gehen auch.`
       : '👉 Antwortet einfach mit einem Kommentar.',
   );
-  const mentions = (cfg.team || []).map((t) => `@${t}`).join(' ');
+  // Live collaborators too, so a teammate who accepted the invitation after `hack init` gets the push.
+  const team = new Set([...(cfg.team || []), ...collaboratorLogins(repoName())]);
+  const mentions = [...team].map((t) => `@${t}`).join(' ');
   if (mentions) lines.push('', `cc ${mentions}`);
 
   const url = gh(['issue', 'create', '--title', `❓ ${title}`, '--label', LABEL.question, '--body-file', '-'], {

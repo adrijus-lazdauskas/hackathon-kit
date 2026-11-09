@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # Plan: decided idea → tasks on the board
 
-> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+> The `hack` command is on your PATH while this plugin is enabled. If `hack` is not found or fails to start (for example `hack: command not found` or `node\r: No such file or directory`), run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
 
 Read `IDEA.md`, `DECISIONS.md` and the chosen mockup in `mockups/`. The `team` list in `hackathon.json` tells you how many agents will work in parallel.
 

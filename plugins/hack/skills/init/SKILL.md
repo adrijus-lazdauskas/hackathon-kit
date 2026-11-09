@@ -6,7 +6,7 @@ argument-hint: "[--team login1,login2,...]"
 
 # Set up the hackathon kit
 
-> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+> The `hack` command is on your PATH while this plugin is enabled. If `hack` is not found or fails to start (for example `hack: command not found` or `node\r: No such file or directory`), run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
 
 1. Run `hack doctor`. If gh is missing or not logged in, stop and tell the user the exact command (`gh auth login`). If this folder is not a clone of a GitHub repo, ask the user which repo to use, or offer to create one (`gh repo create <name> --public --clone`, then continue inside it). Don't continue until the repo exists.
 2. The teammates' GitHub logins get @mentioned on every question. Take them from the arguments (`$ARGUMENTS`); repo collaborators are added automatically. If neither gives the whole team, ask the user once for the missing logins.

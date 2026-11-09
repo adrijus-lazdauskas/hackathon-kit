@@ -6,7 +6,7 @@ argument-hint: "[the idea in a few words]"
 
 # Kickoff: idea → brief → mockups → decision
 
-> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+> The `hack` command is on your PATH while this plugin is enabled. If `hack` is not found or fails to start (for example `hack: command not found` or `node\r: No such file or directory`), run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
 
 The idea belongs to the humans. Your job is to make it concrete fast and let them decide.
 

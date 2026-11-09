@@ -1,0 +1,2 @@
+# Keep LF everywhere, also on Windows checkouts (a CRLF shebang breaks the `hack` command).
+* text=auto eol=lf

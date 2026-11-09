@@ -16,21 +16,50 @@ Ein Claude-Code-Plugin für Hackathon-Teams. Jedes Teammitglied lässt seinen ei
 
 ## Einmal vorher, jede Person
 
-1. Claude Code aktuell halten (`claude update`) und Node 18 oder neuer installieren.
-2. GitHub-CLI installieren (`brew install gh` oder https://cli.github.com) und einloggen:
+Am einfachsten startet jede Person Claude Code (`claude`) in einem beliebigen Ordner und fügt diesen Prompt ein. Claude prüft dann alles, installiert, was fehlt, und sagt dir, was du selbst machen musst:
+
+```text
+Bereite meinen Rechner für einen Hackathon mit dem Claude-Code-Plugin hackathon-kit vor (github.com/adrijus-lazdauskas/hackathon-kit). Prüf bei jedem Punkt erst, was schon da ist, und installier nur, was fehlt. Was ich selbst machen muss (Browser-Login, eigenes Terminal), sagst du mir mit dem genauen Befehl und wartest, bis ich fertig bin. Ändere nichts außerhalb dieser Liste.
+
+1. Erkenne das Betriebssystem. Unter Windows installierst du mit winget, unter macOS mit Homebrew. Muss ich nach einer Installation ein neues Terminal öffnen, sag es mir.
+2. Git muss installiert sein. Sind `git config --global user.name` oder `user.email` leer, frag mich nach Name und E-Mail meines GitHub-Accounts und setz sie.
+3. Node.js 18 oder neuer (`node -v`), sonst die LTS-Version installieren.
+4. GitHub-CLI `gh`, sonst installieren.
+5. `gh auth status`: Bin ich nicht eingeloggt, soll ich in einem eigenen Terminal `gh auth login` ausführen (GitHub.com, dann HTTPS, dann „Authenticate Git with your GitHub credentials“: Yes, dann Login im Browser). Fehlt bei den Token-Scopes `workflow`, soll ich `gh auth refresh -s workflow` ausführen. Danach führst du `gh auth setup-git` aus.
+6. `claude --version` muss mindestens 2.1.234 sein, sonst soll ich `claude update` ausführen.
+7. Installier das Plugin mit `claude plugin marketplace add adrijus-lazdauskas/hackathon-kit` und `claude plugin install hack@hackathon-kit`. Wird das blockiert, gib mir die zwei Befehle, dann führe ich sie selbst aus.
+8. Prüf alles mit `node "<Plugin-Ordner>/bin/hack" doctor`. Der Plugin-Ordner liegt unter `~/.claude/plugins/cache/hackathon-kit/hack/<Version>`. Behebe jede Zeile mit ✘. Die Zeile „not inside a git repo“ ist in Ordnung.
+9. Unter Windows darf die Umgebungsvariable `CLAUDE_CODE_USE_POWERSHELL_TOOL` nicht gesetzt sein.
+10. Zum Schluss eine kurze Liste: was erledigt ist und was ich noch selbst machen muss. Dazu gehört immer: in Claude Code unter `/config` „Continue automatically at usage limit“ einschalten, die GitHub-App aufs Handy laden, einloggen und Push-Benachrichtigungen erlauben, meinen GitHub-Login an die Person schicken, die das Repo anlegt, und die Einladung zum Repo annehmen.
+```
+
+Von Hand geht es so:
+
+1. Claude Code aktuell halten (`claude update`) und Node 18 oder neuer installieren (unter Windows `winget install --id OpenJS.NodeJS.LTS -e`).
+2. Git braucht deinen Namen und deine E-Mail (`git config --global user.name "..."` und `git config --global user.email "..."`).
+3. GitHub-CLI installieren (`brew install gh`, unter Windows `winget install --id GitHub.cli -e`) und einloggen:
 
    ```bash
    gh auth login
    ```
 
-3. In der GitHub-App auf dem Handy Push-Benachrichtigungen für Erwähnungen (@mentions) einschalten.
-4. Automatisches Weitermachen nach dem Limit einschalten: im Terminal in `/config` die Einstellung „Continue automatically at usage limit“, in der Desktop-App die Checkbox „Auto-continue when limits reset“ auf der Limit-Karte (die erscheint erst, wenn das Limit einmal erreicht ist).
-5. Das Plugin in Claude Code installieren:
+   Dabei HTTPS wählen und „Authenticate Git with your GitHub credentials“ mit Yes beantworten.
+4. In der GitHub-App auf dem Handy Push-Benachrichtigungen für Erwähnungen (@mentions) einschalten.
+5. Automatisches Weitermachen nach dem Limit einschalten: im Terminal in `/config` die Einstellung „Continue automatically at usage limit“, in der Desktop-App die Checkbox „Auto-continue when limits reset“ auf der Limit-Karte (die erscheint erst, wenn das Limit einmal erreicht ist).
+6. Das Plugin installieren, im Terminal:
 
-   ```text
-   /plugin marketplace add adrijus-lazdauskas/hackathon-kit
-   /plugin install hack@hackathon-kit
+   ```bash
+   claude plugin marketplace add adrijus-lazdauskas/hackathon-kit
    ```
+
+   ```bash
+   claude plugin install hack@hackathon-kit
+   ```
+
+   Oder in einer laufenden Claude-Code-Session `/plugin marketplace add adrijus-lazdauskas/hackathon-kit` und dann `/plugin install hack@hackathon-kit`.
+7. Prüfen: `hack doctor` (in Claude Code: „Führe hack doctor aus“) zeigt bei jedem fehlenden Teil ein ✘ mit dem Befehl, der es behebt.
+
+**Windows:** Claude Code führt Befehle unter Windows in Git Bash aus, das Kit läuft dort genauso. Die Vorschau-Funktion `CLAUDE_CODE_USE_POWERSHELL_TOOL` nicht einschalten, sonst greifen die Regeln des Kits nicht. Umgebungsvariablen setzt du in PowerShell so: `$env:HACK_AGENT = "adrijus-2"; claude --permission-mode auto`.
 
 ## Am Hackathon-Tag
 
@@ -75,6 +104,23 @@ Ein Agent erkennt seine Tasks an seiner Kennung, standardmäßig dein GitHub-Log
 HACK_AGENT=adrijus-2 claude --permission-mode auto
 ```
 
+## Testlauf vor dem Hackathon
+
+Zwei Schalter verkürzen Wartezeiten. Sie gelten nur für den Agent, der mit ihnen gestartet wird:
+
+- `HACK_STALE_MINUTES=10`: Ein liegengebliebener Task wird schon nach 10 statt nach 45 Minuten übernommen.
+- `HACK_USAGE_HANDOFF_AT=35`: Die Übergabe kommt schon ab 35 % statt ab 92 %. Nimm einen Wert knapp über dem Stand in der Status-Zeile. Die Warnung (`HACK_USAGE_WARN_AT`) kommt nie später als die Übergabe.
+
+```bash
+HACK_STALE_MINUTES=10 claude --permission-mode auto
+```
+
+Unter Windows in PowerShell:
+
+```powershell
+$env:HACK_STALE_MINUTES = "10"; claude --permission-mode auto
+```
+
 ## Grenzen der ersten Version
 
 - Die Limit-Werte kommen aus der Status-Zeile von Claude Code (nur mit Pro-, Max- oder Ultra-Abo). Das Kit setzt dafür im Projekt eine eigene Status-Zeile, die deine persönliche weiter anzeigt. Läuft keine Status-Zeile (z. B. wenn die Desktop-App keine anzeigt), fehlt die Vorwarnung. Die Übergabe bei erreichtem Limit greift trotzdem.
@@ -82,11 +128,16 @@ HACK_AGENT=adrijus-2 claude --permission-mode auto
 - GitHub benachrichtigt dich nicht über deine eigenen Aktionen. Stellt dein Agent eine Frage, bekommen nur die anderen eine Push.
 - Die Pages-Vorschau gibt es nur für öffentliche Repos (bei privaten nur mit bezahltem GitHub-Plan).
 - Die Agents reden asynchron miteinander. Eine Nachricht kommt innerhalb von etwa einer Minute an, nicht sofort.
+- Unter Windows ist das Kit noch nicht in echt getestet, nur mit einem nachgestellten Windows-Klon.
 
 ## Update
 
-```text
-/plugin marketplace update hackathon-kit
+```bash
+claude plugin marketplace update hackathon-kit
 ```
 
-Danach `/hack:init` im Projekt erneut ausführen, wenn sich Workflows geändert haben (bestehende `ci.yml` und `preview.yml` bleiben unangetastet, außer mit `--force`).
+```bash
+claude plugin update hack@hackathon-kit
+```
+
+Danach Claude Code neu starten und `/hack:init` im Projekt erneut ausführen, wenn sich Workflows geändert haben (bestehende `ci.yml` und `preview.yml` bleiben unangetastet, außer mit `--force`).

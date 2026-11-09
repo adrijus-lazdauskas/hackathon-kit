@@ -7,11 +7,16 @@ export const CACHE_DIR = process.env.HACK_CACHE_DIR || join(homedir(), '.cache',
 const USAGE_FILE = join(CACHE_DIR, 'usage.json');
 const NOTICE_FILE = join(CACHE_DIR, 'notices.json');
 
+// hackathon.json sets the team defaults; HACK_USAGE_WARN_AT / HACK_USAGE_HANDOFF_AT override them
+// for one agent, e.g. to see the hand-off in a test run without burning the whole limit.
 export function thresholds(cfg = {}) {
   const u = cfg.usage || {};
+  const env = (name) => (process.env[name] ? Number(process.env[name]) : undefined);
+  const handoff = env('HACK_USAGE_HANDOFF_AT') ?? Number(u.handoffAt ?? 92);
   return {
-    warn: Number(u.warnAt ?? 80),
-    handoff: Number(u.handoffAt ?? 92),
+    // The hand-off check sits inside the warning check, so the warning must not come later.
+    warn: Math.min(env('HACK_USAGE_WARN_AT') ?? Number(u.warnAt ?? 80), handoff),
+    handoff,
     releaseIfResetInMin: Number(u.releaseIfResetInMin ?? 15),
   };
 }

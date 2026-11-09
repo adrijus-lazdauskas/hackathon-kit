@@ -6,7 +6,7 @@ argument-hint: "[focus, e.g. onboarding, or a preview URL]"
 
 # User testing
 
-> The `hack` command is on your PATH while this plugin is enabled. If the shell reports `hack: command not found`, run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
+> The `hack` command is on your PATH while this plugin is enabled. If `hack` is not found or fails to start (for example `hack: command not found` or `node\r: No such file or directory`), run it as `node "${CLAUDE_PLUGIN_ROOT}/bin/hack"` instead, with the same arguments.
 
 You don't fix anything here. You find problems and turn each one into a clear task for the other agents.
 

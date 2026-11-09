@@ -1,0 +1,2 @@
+# Same line endings on every OS, so Windows checkouts do not trip linters or shell scripts.
+* text=auto eol=lf
